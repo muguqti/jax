@@ -50,6 +50,13 @@ if [[ $os =~ "msys_nt"  && $arch == "x86_64" ]]; then
   arch="amd64"
 fi
 
+# Adjust the values when running on Windows ARM64 to match the config in
+# .bazelrc
+if [[ $os =~ "msys_nt"  && $arch == "aarch64" ]]; then
+  os="windows"
+  arch="arm64"
+fi
+
 # Determine the artifact tag flags based on the artifact type. A release
 # wheel is tagged with the release version (e.g. 0.5.1), a nightly wheel is
 # tagged with the release version and a nightly suffix that contains the

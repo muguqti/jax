@@ -44,10 +44,17 @@ os=$(uname -s | awk '{print tolower($0)}')
 arch=$(uname -m)
 
 bazel_output_base=""
-# Adjust os and arch for Windows
+# Adjust os and arch for Windows x86_64
 if [[  $os  =~ "msys_nt" ]] && [[ $arch =~ "x86_64" ]]; then
   os="windows"
   arch="amd64"
+  bazel_output_base="--output_base=C:\actions-runner\_work\bazel_output_base"
+fi
+
+# Adjust os and arch for Windows ARM64
+if [[  $os  =~ "msys_nt" ]] && [[ $arch =~ "aarch64" ]]; then
+  os="windows"
+  arch="arm64"
   bazel_output_base="--output_base=C:\actions-runner\_work\bazel_output_base"
 fi
 
@@ -83,6 +90,12 @@ test_strategy=""
 # platforms in the presubmit jobs.
 if [[ $os == "darwin" ]] || ( [[ $os == "linux" ]] && [[ $arch == "aarch64" ]] ); then
     rbe_config=rbe_cross_compile_${os}_${arch}
+    if [[ "$JAXCI_BAZEL_CPU_RBE_MODE" == 'test' ]]; then
+        test_strategy="--strategy=TestRunner=local"
+    fi
+elif [[ $os == "windows" ]] && [[ $arch == "arm64" ]]; then
+    # Windows ARM64 has no RBE support; fall back to the local CI config.
+    rbe_config=ci_windows_arm64
     if [[ "$JAXCI_BAZEL_CPU_RBE_MODE" == 'test' ]]; then
         test_strategy="--strategy=TestRunner=local"
     fi

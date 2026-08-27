@@ -179,6 +179,8 @@ pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_depen
         # Explicitly list both x86_64 and aarch64 to ensure cross-compilation works.
         "{os}_x86_64",
         "{os}_aarch64",
+        # Windows ARM64 uses "arm64" not "aarch64" in its platform tag.
+        "windows_arm64",
         "{os}_{arch}_freethreaded",
     ],
     whl_modifications = {

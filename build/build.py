@@ -545,6 +545,10 @@ async def main():
   if clang_local:
     if "cuda" in args.wheels and utils.is_linux(os_name):
       wheel_build_command_base.append("--config=cuda_clang_local")
+    elif utils.is_windows_arm64(arch, os_name):
+      # Windows ARM64 uses win_arm64_clang which sets --cpu=arm64_windows,
+      # the ARM64 clang-cl toolchain, and --build_python_zip automatically.
+      wheel_build_command_base.append("--config=win_arm64_clang")
     else:
       wheel_build_command_base.append("--config=clang_local")
 
@@ -578,7 +582,8 @@ async def main():
     logging.debug("Enabling MKL DNN")
     if target_cpu == "aarch64":
       wheel_build_command_base.append("--config=mkl_aarch64_threadpool")
-    else:
+    elif not utils.is_windows_arm64(arch, os_name):
+      # mkl_open_source_only is x86-specific; skip for Windows ARM64.
       wheel_build_command_base.append("--config=mkl_open_source_only")
 
   if args.target_cpu_features == "release":

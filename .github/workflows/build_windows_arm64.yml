@@ -1,0 +1,210 @@
+name: Build and Test jaxlib (Windows ARM64)
+
+# Trial-and-error CI for porting jaxlib to Windows ARM64.
+# Uses native windows-11-arm GitHub Actions runners.
+# Host machine is x64 Windows 11; this workflow targets ARM64.
+#
+# To test without triggering other workflows, push to a branch matching
+# 'test/windows-arm64**' – only this workflow listens to that pattern.
+
+on:
+  push:
+    branches:
+      - main
+      - 'test/windows-arm64**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      python_version:
+        description: "Python version to build with"
+        required: false
+        default: "3.12"
+      debug_enabled:
+        description: "Enable tmate debug session on failure"
+        required: false
+        default: "false"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-jaxlib-windows-arm64:
+    name: Build jaxlib wheel (Windows ARM64)
+    runs-on: windows-11-arm
+    timeout-minutes: 180
+
+    env:
+      PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.12' }}
+      # Use bazelisk to avoid manual Bazel binary SHA256 management.
+      USE_BAZEL_VERSION: "8.7.0"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Python setup
+      # -----------------------------------------------------------------------
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: arm64
+
+      - name: Install Python build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          # numpy and scipy are available as pre-built wheels; skip for core jaxlib build test.
+          # The Bazel build itself does not require them to be pre-installed at this stage.
+          # Uncomment if the build script explicitly needs them before Bazel runs:
+          # python -m pip install numpy scipy
+
+      # -----------------------------------------------------------------------
+      # Bazel setup via bazelisk
+      # -----------------------------------------------------------------------
+      - name: Install bazelisk
+        shell: pwsh
+        run: |
+          # Install bazelisk via Chocolatey (available on GitHub-hosted runners)
+          choco install bazelisk -y --no-progress
+          # Verify
+          bazel version
+
+      # -----------------------------------------------------------------------
+      # LLVM / clang-cl setup
+      # -----------------------------------------------------------------------
+      - name: Install LLVM (clang-cl for ARM64)
+        shell: pwsh
+        run: |
+          # Install LLVM via Chocolatey. The ARM64 runner has x64 emulation so
+          # choco works. The installed clang-cl will be used by Bazel.
+          choco install llvm -y --no-progress --version=18.1.8
+          # Add LLVM to PATH
+          $llvmBin = "C:\Program Files\LLVM\bin"
+          if (Test-Path $llvmBin) {
+            echo "$llvmBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            echo "LLVM_PATH=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            Write-Error "LLVM not found at $llvmBin"
+            exit 1
+          }
+          clang --version
+          clang-cl --version
+
+      # -----------------------------------------------------------------------
+      # Build jaxlib wheel
+      # -----------------------------------------------------------------------
+      - name: Configure and build jaxlib wheel
+        shell: pwsh
+        run: |
+          # Run from the repo root using Git Bash (MSYS2) for the build script.
+          # build/build.py is a Python script so we can call it directly.
+          python build/build.py build `
+            --wheels=jaxlib `
+            --python_version=${{ env.PYTHON_VERSION }} `
+            --bazel_options=--config=ci_windows_arm64 `
+            --verbose `
+            --output_path=dist
+
+      - name: List built wheels
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path dist -Filter "*.whl" | ForEach-Object {
+            Write-Host "Built wheel: $($_.Name)"
+          }
+
+      # -----------------------------------------------------------------------
+      # Upload wheel artifact
+      # -----------------------------------------------------------------------
+      - name: Upload jaxlib wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaxlib-windows-arm64-py${{ env.PYTHON_VERSION }}
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Test job – runs on the same ARM64 runner using the wheel built above
+  # ---------------------------------------------------------------------------
+  test-jaxlib-windows-arm64:
+    name: Test jaxlib (Windows ARM64)
+    needs: build-jaxlib-windows-arm64
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+
+    env:
+      PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.12' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: arm64
+
+      - name: Download jaxlib wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: jaxlib-windows-arm64-py${{ env.PYTHON_VERSION }}
+          path: dist
+
+      - name: Install jaxlib and dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          # Install the locally built jaxlib wheel
+          $wheel = Get-ChildItem -Path dist -Filter "jaxlib*.whl" | Select-Object -First 1
+          if (-not $wheel) {
+            Write-Error "No jaxlib wheel found in dist/"
+            exit 1
+          }
+          Write-Host "Installing: $($wheel.FullName)"
+          python -m pip install $wheel.FullName
+          # Install JAX (pure Python, from source)
+          python -m pip install -e . --no-build-isolation
+          # Install test dependencies (numpy/scipy available as wheels)
+          python -m pip install numpy scipy absl-py pytest
+
+      - name: Smoke test - import jax
+        shell: pwsh
+        run: |
+          python -c "import jax; print('JAX version:', jax.__version__); print('Devices:', jax.devices())"
+
+      - name: Run basic JAX tests
+        shell: pwsh
+        run: |
+          # Run a small subset of tests that are known to work on CPU.
+          # Expand this list as more tests pass.
+          python -m pytest tests/lax_numpy_test.py -x -q `
+            --tb=short `
+            -k "not gpu and not tpu" `
+            --timeout=300 `
+            -p no:warnings `
+            2>&1 | Tee-Object -FilePath test_output.txt
+          $exitCode = $LASTEXITCODE
+          Get-Content test_output.txt
+          exit $exitCode
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows-arm64-py${{ env.PYTHON_VERSION }}
+          path: test_output.txt
+          retention-days: 7
+
+      # -----------------------------------------------------------------------
+      # Optional: tmate debug session on failure
+      # -----------------------------------------------------------------------
+      - name: Setup tmate session on failure
+        if: ${{ failure() && github.event.inputs.debug_enabled == 'true' }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
