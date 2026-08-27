@@ -1,0 +1,12 @@
+diff --git a/MODULE.bazel b/MODULE.bazel
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -61,8 +61,6 @@
+ )
+ 
+ PYTHON_VERSIONS = [
+-    "3.9",
+-    "3.10",
+     "3.11",
+     "3.12",
+     "3.13",

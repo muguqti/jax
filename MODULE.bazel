@@ -53,6 +53,14 @@ single_version_override(
     version = "1.81.0",
 )
 
+# Remove Python 3.9 and 3.10 from protoc-gen-validate's pip hub (unavailable on Windows ARM64).
+single_version_override(
+    module_name = "protoc-gen-validate",
+    patch_strip = 1,
+    patches = ["//third_party/pgv:pgv_remove_py39_py310.patch"],
+    version = "1.2.1.bcr.1",
+)
+
 ##############################################################
 # Dependencies defined in XLA via module extensions
 ##############################################################
@@ -112,9 +120,6 @@ single_version_override(
         "//third_party/py:rules_python_cpython_3_15.patch",
         # Upstreamed: https://github.com/bazel-contrib/rules_python/pull/4071
         "//third_party/py:rules_python_windows_long_paths.patch",
-        # Skip pip hubs for Python versions unavailable on Windows ARM64 (e.g. 3.9, 3.10)
-        # instead of failing. Fixes transitive deps (grpc, pgv) that register old Python versions.
-        "//third_party/py:rules_python_skip_unavailable_interpreters.patch",
     ],
     version = "2.2.0",
 )
