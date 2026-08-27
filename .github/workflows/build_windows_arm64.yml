@@ -84,6 +84,8 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Install LLVM WoA64 (native ARM64 clang-cl)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Use the native Windows-on-ARM64 LLVM release instead of the x86
           # Chocolatey package. The WoA64 installer produces a true ARM64
@@ -105,6 +107,7 @@ jobs:
             while (-not $downloadUrl) {
               $releases = Invoke-RestMethod `
                 -Uri "https://api.github.com/repos/llvm/llvm-project/releases?per_page=10&page=$page" `
+                -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } `
                 -UseBasicParsing
               if ($releases.Count -eq 0) { break }
               foreach ($release in $releases) {
