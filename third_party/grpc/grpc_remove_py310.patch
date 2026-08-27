@@ -1,7 +1,7 @@
 diff --git a/MODULE.bazel b/MODULE.bazel
 --- a/MODULE.bazel
 +++ b/MODULE.bazel
-@@ -102,9 +102,8 @@ DEFAULT_PYTHON_VERSION = "3.11"
+@@ -103,8 +103,7 @@ DEFAULT_PYTHON_VERSION = "3.11"
  
  PYTHON_VERSIONS = [
 -    "3.10",
