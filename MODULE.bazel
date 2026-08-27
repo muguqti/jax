@@ -112,6 +112,9 @@ single_version_override(
         "//third_party/py:rules_python_cpython_3_15.patch",
         # Upstreamed: https://github.com/bazel-contrib/rules_python/pull/4071
         "//third_party/py:rules_python_windows_long_paths.patch",
+        # Skip pip hubs for Python versions unavailable on Windows ARM64 (e.g. 3.9, 3.10)
+        # instead of failing. Fixes transitive deps (grpc, pgv) that register old Python versions.
+        "//third_party/py:rules_python_skip_unavailable_interpreters.patch",
     ],
     version = "2.2.0",
 )

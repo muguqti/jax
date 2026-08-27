@@ -1,0 +1,32 @@
+diff --git a/python/private/pypi/hub_builder.bzl b/python/private/pypi/hub_builder.bzl
+--- a/python/private/pypi/hub_builder.bzl
++++ b/python/private/pypi/hub_builder.bzl
+@@ -399,18 +399,8 @@
+         python_name = "python_{}_host".format(
+             pip_attr.python_version.replace(".", "_"),
+         )
+         if python_name not in self._available_interpreters:
+-            fail((
+-                "Unable to find interpreter for pip hub '{hub_name}' for " +
+-                "python_version={version}: Make sure a corresponding " +
+-                '`python.toolchain(python_version="{version}")` call exists.' +
+-                "Expected to find {python_name} among registered versions:\n  {labels}"
+-            ).format(
+-                hub_name = self.name,
+-                version = pip_attr.python_version,
+-                python_name = python_name,
+-                labels = "  \n".join(self._available_interpreters),
+-            ))
++            return None
+         python_interpreter_target = self._available_interpreters[python_name]
+ 
+     return struct(
+@@ -529,6 +519,8 @@
+     )
+ 
+     interpreter = _detect_interpreter(self, pip_attr)
++    if interpreter == None:
++        return
+ 
+     for whl in requirements_by_platform:
+         whl_library_args = common_args | _whl_library_args(
