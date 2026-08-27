@@ -1,0 +1,1 @@
+# Bazel package for protoc-gen-validate patches.
